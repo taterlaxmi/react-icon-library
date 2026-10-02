@@ -30,32 +30,39 @@ The `dev` script uses `brand-assets/` as its input and writes components to `src
 
 **Rerunning `npm run dev` overwrites generated files** in `src/icons/`. Avoid editing generated components by hand; change the source image and regenerate instead.
 
-## Use the generator in another repository
+## Use icons in another repository
 
-The generator package runs against image files in the React app where you invoke it. In the other React application's root, place the image in a folder such as `brand-assets/kiwi.png`, then install this GitHub package as a development dependency:
-
-```bash
-npm install --save-dev github:taterlaxmi/react-icon-library
-npx react-icon-library ./brand-assets --output ./src/icons
-```
-
-The CLI does not overwrite existing files by default. To regenerate an existing icon set, add `--overwrite`:
+Install the package in a React application:
 
 ```bash
-npx react-icon-library ./brand-assets --output ./src/icons --overwrite
+npm install @taterlaxmi/react-icon-library
 ```
 
-Commit the generated `src/icons/` files in the React app. Import its generated icon like this:
+Import icons directly from the package root. You do not need to copy an image or run the generator in the consuming app:
 
 ```tsx
-import { Kiwi } from './icons';
+import { Kiwi } from '@taterlaxmi/react-icon-library';
 
 export function Brand() {
-	return <Kiwi title="Kiwi" width={32} height={32} />;
+  return <Kiwi title="Kiwi" width={32} height={32} />;
 }
 ```
 
-The installed package provides the generator CLI and `generateIcons()` API; it does **not** currently export this repository's sample `Kiwi` component from the package root. To use Kiwi in another app, put `kiwi.png` in that app's `brand-assets/` folder and generate the component there as shown above.
+The package declares React as a peer dependency, so the consuming application should already have React installed. If the app uses TypeScript, `KiwiProps` is also exported:
+
+```tsx
+import { Kiwi, type KiwiProps } from '@taterlaxmi/react-icon-library';
+```
+
+## Generate additional icons
+
+The package also provides a CLI and programmatic generator for your own image assets. In the consuming app, put images in a folder such as `brand-assets/`, then run:
+
+```bash
+npx react-icon-library ./brand-assets --output ./src/icons
+```
+
+The CLI does not overwrite existing generated files by default. Add `--overwrite` to regenerate them. Generated components are local source files and can be imported from the app's own `./icons` module.
 
 ## CLI options
 

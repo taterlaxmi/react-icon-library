@@ -1,7 +1,9 @@
 import {
+  Kiwi,
   generateIcons
-} from "./chunk-N5DDYT6F.js";
+} from "./chunk-7UCNUTGX.js";
 export {
+  Kiwi,
   generateIcons
 };
 //# sourceMappingURL=index.js.map

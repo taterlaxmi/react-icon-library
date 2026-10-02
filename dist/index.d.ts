@@ -1,11 +1,15 @@
+import * as react from 'react';
+import { SVGProps } from 'react';
+
+interface KiwiProps extends SVGProps<SVGSVGElement> {
+    title?: string;
+}
+declare function Kiwi({ title, width, height, ...props }: KiwiProps): react.JSX.Element;
+
 interface GenerateIconsOptions {
-    /** Directory containing source image assets. */
     inputDir: string;
-    /** Directory where generated React components and their barrel are written. */
     outputDir: string;
-    /** Include nested folders. Enabled by default. */
     recursive?: boolean;
-    /** Replace generated files that already exist. Disabled by default. */
     overwrite?: boolean;
 }
 interface GeneratedIcon {
@@ -17,7 +21,6 @@ interface GenerateIconsResult {
     icons: GeneratedIcon[];
     outputDir: string;
 }
-/** Generate typed React components and a named-export barrel from image files. */
 declare function generateIcons(options: GenerateIconsOptions): Promise<GenerateIconsResult>;
 
-export { type GenerateIconsOptions, type GenerateIconsResult, type GeneratedIcon, generateIcons };
+export { type GenerateIconsOptions, type GenerateIconsResult, type GeneratedIcon, Kiwi, type KiwiProps, generateIcons };

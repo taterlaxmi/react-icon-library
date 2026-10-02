@@ -32,6 +32,11 @@ var import_node_path = __toESM(require("path"), 1);
 var import_node_crypto = require("crypto");
 var import_image_size = require("image-size");
 var import_core = require("@svgr/core");
+
+// src/icons/Kiwi.tsx
+var import_jsx_runtime = require("react/jsx-runtime");
+
+// src/index.ts
 var RASTER_MIME_TYPES = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -90,7 +95,6 @@ async function rasterComponent(asset, component) {
   return `import type { SVGProps } from 'react';
 
 export interface ${component}Props extends SVGProps<SVGSVGElement> {
-  /** Accessible label. Omit for a decorative icon. */
   title?: string;
 }
 
@@ -98,15 +102,7 @@ const imageSource = ${JSON.stringify(dataUri)};
 
 export default function ${component}({ title, width, height, ...props }: ${component}Props) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 ${dimensions.width} ${dimensions.height}"
-      width={width ?? '1em'}
-      height={height ?? '1em'}
-      role={title ? 'img' : undefined}
-      aria-hidden={title ? undefined : true}
-      {...props}
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dimensions.width} ${dimensions.height}" width={width ?? '1em'} height={height ?? '1em'} role={title ? 'img' : undefined} aria-hidden={title ? undefined : true} {...props}>
       {title ? <title>{title}</title> : null}
       <image href={imageSource} x="0" y="0" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" />
     </svg>
@@ -207,7 +203,7 @@ program.name("react-icon-library").description("Generate reusable React icon com
       ...options.overwrite === void 0 ? {} : { overwrite: options.overwrite }
     });
     console.log(`Generated ${result.icons.length} React icon(s) in ${result.outputDir}`);
-    for (const icon of result.icons) console.log(`  ${icon.name}  \u2190  ${icon.source}`);
+    for (const icon of result.icons) console.log(`  ${icon.name}  <-  ${icon.source}`);
   } catch (error) {
     console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;

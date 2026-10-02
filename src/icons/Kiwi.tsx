@@ -1,7 +1,6 @@
 import type { SVGProps } from 'react';
 
 export interface KiwiProps extends SVGProps<SVGSVGElement> {
-  /** Accessible label. Omit for a decorative icon. */
   title?: string;
 }
 
@@ -9,15 +8,7 @@ const imageSource = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAb8AAAG/CAMAA
 
 export default function Kiwi({ title, width, height, ...props }: KiwiProps) {
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 447 447"
-      width={width ?? '1em'}
-      height={height ?? '1em'}
-      role={title ? 'img' : undefined}
-      aria-hidden={title ? undefined : true}
-      {...props}
-    >
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 447 447" width={width ?? '1em'} height={height ?? '1em'} role={title ? 'img' : undefined} aria-hidden={title ? undefined : true} {...props}>
       {title ? <title>{title}</title> : null}
       <image href={imageSource} x="0" y="0" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" />
     </svg>

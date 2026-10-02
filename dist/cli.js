@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   generateIcons
-} from "./chunk-N5DDYT6F.js";
+} from "./chunk-7UCNUTGX.js";
 
 // src/cli.ts
 import { Command } from "commander";
@@ -15,7 +15,7 @@ program.name("react-icon-library").description("Generate reusable React icon com
       ...options.overwrite === void 0 ? {} : { overwrite: options.overwrite }
     });
     console.log(`Generated ${result.icons.length} React icon(s) in ${result.outputDir}`);
-    for (const icon of result.icons) console.log(`  ${icon.name}  \u2190  ${icon.source}`);
+    for (const icon of result.icons) console.log(`  ${icon.name}  <-  ${icon.source}`);
   } catch (error) {
     console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
