@@ -207,5 +207,4 @@ export async function generateIcons(options: GenerateIconsOptions): Promise<Gene
   };
 }
 
-export { default as Kiwi } from './icons/Kiwi.js';
-export type { KiwiProps } from './icons/Kiwi.js';
+export * from './icons/index.js';

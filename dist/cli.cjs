@@ -33,8 +33,14 @@ var import_node_crypto = require("crypto");
 var import_image_size = require("image-size");
 var import_core = require("@svgr/core");
 
-// src/icons/Kiwi.tsx
+// src/icons/Drinkprime.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
+
+// src/icons/Kiwi.tsx
+var import_jsx_runtime2 = require("react/jsx-runtime");
+
+// src/icons/Zepto.tsx
+var import_jsx_runtime3 = require("react/jsx-runtime");
 
 // src/index.ts
 var RASTER_MIME_TYPES = {
@@ -210,4 +216,3 @@ program.name("react-icon-library").description("Generate reusable React icon com
   }
 });
 program.parseAsync();
-//# sourceMappingURL=cli.cjs.map

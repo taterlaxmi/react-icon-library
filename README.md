@@ -41,10 +41,16 @@ npm install @taterlaxmi/react-icon-library
 Import icons directly from the package root. You do not need to copy an image or run the generator in the consuming app:
 
 ```tsx
-import { Kiwi } from '@taterlaxmi/react-icon-library';
+import { Drinkprime, Kiwi, Zepto } from '@taterlaxmi/react-icon-library';
 
 export function Brand() {
-  return <Kiwi title="Kiwi" width={32} height={32} />;
+	return (
+		<div>
+			<Kiwi title="Kiwi" width={32} height={32} />
+			<Drinkprime title="Drinkprime" width={32} height={32} />
+			<Zepto title="Zepto" width={32} height={32} />
+		</div>
+	);
 }
 ```
 

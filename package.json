@@ -1,6 +1,6 @@
 {
     "name": "@taterlaxmi/react-icon-library",
-    "version": "1.0.1",
+    "version": "1.0.3",
     "publishConfig": {
         "access": "public"
     },
@@ -30,7 +30,7 @@
         "LICENSE"
     ],
     "scripts": {
-        "build": "tsup src/index.ts src/cli.ts --format esm,cjs --dts --clean --sourcemap",
+        "build": "tsup src/index.ts src/cli.ts --format esm,cjs --dts --clean --splitting false",
         "dev": "node ./dist/cli.js ./brand-assets --output ./src/icons --overwrite",
         "generate": "node ./dist/cli.js",
         "typecheck": "tsc --noEmit",
