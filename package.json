@@ -1,48 +1,51 @@
 {
-  "name": "react-icon-library",
-  "version": "1.0.0",
-  "description": "Generate reusable React icon components from image assets.",
-  "license": "MIT",
-  "author": "React Icon Library contributors",
-  "type": "module",
-  "engines": {
-    "node": ">=20.0.0"
-  },
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
-    }
-  },
-  "bin": {
-    "react-icon-library": "./dist/cli.js"
-  },
-  "files": [
-    "dist",
-    "README.md",
-    "LICENSE"
-  ],
-  "scripts": {
-    "dev": "node ./dist/cli.js ./brand-assets --output ./src/icons --overwrite",
-    "generate": "node ./dist/cli.js"
-  },
-  "dependencies": {
-    "@svgr/core": "^8.1.0",
-    "@svgr/plugin-jsx": "^8.1.0",
-    "@svgr/plugin-svgo": "^8.1.0",
-    "commander": "^13.1.0",
-    "image-size": "^2.0.2"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/taterlaxmi/react-icon-library.git"
-  },
-  "bugs": {
-    "url": "https://github.com/taterlaxmi/react-icon-library/issues"
-  },
-  "homepage": "https://github.com/taterlaxmi/react-icon-library#readme"
+    "name": "@taterlaxmi/react-icon-library",
+    "version": "1.0.0",
+    "publishConfig": {
+        "access": "public"
+    },
+    "description": "Generate reusable React icon components from image assets.",
+    "license": "MIT",
+    "author": "React Icon Library contributors",
+    "type": "module",
+    "engines": {
+        "node": ">=20.0.0"
+    },
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "bin": {
+        "react-icon-library": "dist/cli.js"
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
+    "scripts": {
+        "dev": "node ./dist/cli.js ./brand-assets --output ./src/icons --overwrite",
+        "generate": "node ./dist/cli.js"
+    },
+    "dependencies": {
+        "@svgr/core": "^8.1.0",
+        "@svgr/plugin-jsx": "^8.1.0",
+        "@svgr/plugin-svgo": "^8.1.0",
+        "commander": "^13.1.0",
+        "image-size": "^2.0.2"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/taterlaxmi/react-icon-library.git"
+    },
+    "bugs": {
+        "url": "https://github.com/taterlaxmi/react-icon-library/issues"
+    },
+    "homepage": "https://github.com/taterlaxmi/react-icon-library#readme"
 }
