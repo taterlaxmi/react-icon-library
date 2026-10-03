@@ -17,6 +17,10 @@
 
 # production
 /build
+/dist
+
+# generated icon components — run `npm run dev` to recreate from brand-assets/
+/src/icons/
 
 # misc
 .DS_Store

@@ -26,23 +26,12 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 // src/cli.ts
 var import_commander = require("commander");
 
-// src/index.ts
+// src/generator.ts
 var import_promises = require("fs/promises");
 var import_node_path = __toESM(require("path"), 1);
 var import_node_crypto = require("crypto");
 var import_image_size = require("image-size");
 var import_core = require("@svgr/core");
-
-// src/icons/Drinkprime.tsx
-var import_jsx_runtime = require("react/jsx-runtime");
-
-// src/icons/Kiwi.tsx
-var import_jsx_runtime2 = require("react/jsx-runtime");
-
-// src/icons/Zepto.tsx
-var import_jsx_runtime3 = require("react/jsx-runtime");
-
-// src/index.ts
 var RASTER_MIME_TYPES = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -52,6 +41,7 @@ var RASTER_MIME_TYPES = {
   ".avif": "image/avif"
 };
 var VECTOR_EXTENSIONS = /* @__PURE__ */ new Set([".svg"]);
+var RASTER_SIZE_WARN_BYTES = 10 * 1024;
 function componentName(filePath) {
   const baseName = import_node_path.default.basename(filePath, import_node_path.default.extname(filePath));
   const words = baseName.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").match(/[A-Za-z0-9]+/g);
@@ -88,8 +78,15 @@ async function findAssets(inputDir, outputDir, recursive) {
   await visit(inputDir);
   return assets;
 }
-async function rasterComponent(asset, component) {
+async function rasterComponent(asset, component, warnings) {
   const bytes = await (0, import_promises.readFile)(asset.path);
+  if (bytes.length > RASTER_SIZE_WARN_BYTES) {
+    const sourceKB = Math.round(bytes.length / 1024);
+    const bundleKB = Math.round(bytes.length * 4 / 3 / 1024);
+    warnings.push(
+      `"${import_node_path.default.basename(asset.path)}" is ${sourceKB} KB. Embedding it as Base64 will add ~${bundleKB} KB to the JavaScript bundle. Consider converting it to SVG to avoid this overhead.`
+    );
+  }
   let dimensions;
   try {
     dimensions = (0, import_image_size.imageSize)(bytes);
@@ -155,11 +152,14 @@ async function generateIcons(options) {
     }
     names.set(normalizedName, asset.path);
   }
+  const warnings = [];
   const converted = await Promise.all(assets.map(async (asset) => ({
     asset,
-    contents: VECTOR_EXTENSIONS.has(asset.extension) ? await svgComponent(asset, asset.name) : await rasterComponent(asset, asset.name)
+    contents: VECTOR_EXTENSIONS.has(asset.extension) ? await svgComponent(asset, asset.name) : await rasterComponent(asset, asset.name, warnings)
   })));
-  const indexContents = `${converted.map(({ asset }) => `export { default as ${asset.name} } from './${asset.name}.js';`).join("\n")}
+  const indexContents = `${converted.map(
+    ({ asset }) => `export { default as ${asset.name}, type ${asset.name}Props } from './${asset.name}.js';`
+  ).join("\n")}
 `;
   const outputs = [
     ...converted.map(({ asset, contents }) => ({ filePath: import_node_path.default.join(outputDir, `${asset.name}.tsx`), contents })),
@@ -194,13 +194,16 @@ async function generateIcons(options) {
       source: import_node_path.default.relative(inputDir, asset.path),
       componentFile: import_node_path.default.join(outputDir, `${asset.name}.tsx`)
     })),
-    outputDir
+    outputDir,
+    warnings
   };
 }
 
 // src/cli.ts
 var program = new import_commander.Command();
-program.name("react-icon-library").description("Generate reusable React icon components from SVG and raster image files.").argument("[input-dir]", "directory containing image assets", "icons").option("-o, --output <directory>", "output directory for generated components", "src/icons").option("--no-recursive", "only read images directly inside the input directory").option("--overwrite", "replace existing generated component files").action(async (inputDir, options) => {
+program.name("react-icon-library").description(
+  "Generate reusable React icon components from SVG and raster image files.\nNote: raster images (PNG, JPEG, etc.) are embedded as Base64 data URIs.\nLarge raster files significantly increase JavaScript bundle size \u2014 prefer SVG where possible."
+).argument("[input-dir]", "directory containing image assets", "icons").option("-o, --output <directory>", "output directory for generated components", "src/icons").option("--no-recursive", "only read images directly inside the input directory").option("--overwrite", "replace existing generated component files").action(async (inputDir, options) => {
   try {
     const result = await generateIcons({
       inputDir,
@@ -208,6 +211,9 @@ program.name("react-icon-library").description("Generate reusable React icon com
       recursive: options.recursive,
       ...options.overwrite === void 0 ? {} : { overwrite: options.overwrite }
     });
+    for (const warning of result.warnings) {
+      console.warn(`Warning: ${warning}`);
+    }
     console.log(`Generated ${result.icons.length} React icon(s) in ${result.outputDir}`);
     for (const icon of result.icons) console.log(`  ${icon.name}  <-  ${icon.source}`);
   } catch (error) {

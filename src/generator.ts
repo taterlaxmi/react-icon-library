@@ -1,41 +1,77 @@
-#!/usr/bin/env node
+import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { imageSize } from 'image-size';
+import { transform } from '@svgr/core';
 
-// src/cli.ts
-import { Command } from "commander";
-
-// src/generator.ts
-import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "fs/promises";
-import path from "path";
-import { randomUUID } from "crypto";
-import { imageSize } from "image-size";
-import { transform } from "@svgr/core";
-var RASTER_MIME_TYPES = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".avif": "image/avif"
+const RASTER_MIME_TYPES: Readonly<Record<string, string>> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.avif': 'image/avif',
 };
-var VECTOR_EXTENSIONS = /* @__PURE__ */ new Set([".svg"]);
-var RASTER_SIZE_WARN_BYTES = 10 * 1024;
-function componentName(filePath) {
+const VECTOR_EXTENSIONS = new Set(['.svg']);
+
+/**
+ * Raster images are embedded as Base64 data URIs inside the generated
+ * JavaScript. A 10 KB source image adds roughly 14 KB to the JS bundle
+ * (Base64 overhead ~37%). Prefer SVG for brand logos when possible.
+ */
+const RASTER_SIZE_WARN_BYTES = 10 * 1024; // 10 KB
+
+export interface GenerateIconsOptions {
+  inputDir: string;
+  outputDir: string;
+  recursive?: boolean;
+  overwrite?: boolean;
+}
+
+export interface GeneratedIcon {
+  name: string;
+  source: string;
+  componentFile: string;
+}
+
+export interface GenerateIconsResult {
+  icons: GeneratedIcon[];
+  outputDir: string;
+  /** Non-fatal warnings produced during generation (e.g. large raster files). */
+  warnings: string[];
+}
+
+interface SourceAsset {
+  path: string;
+  name: string;
+  extension: string;
+}
+
+function componentName(filePath: string): string {
   const baseName = path.basename(filePath, path.extname(filePath));
-  const words = baseName.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").match(/[A-Za-z0-9]+/g);
-  const name = (words ?? []).map((word) => word[0].toUpperCase() + word.slice(1)).join("");
+  const words = baseName
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .match(/[A-Za-z0-9]+/g);
+  const name = (words ?? []).map((word) => word[0]!.toUpperCase() + word.slice(1)).join('');
   const safeName = /^[A-Za-z_$]/.test(name) ? name : `Icon${name}`;
-  return safeName || "Icon";
+  return safeName || 'Icon';
 }
-function isWithin(parent, child) {
+
+function isWithin(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
-  return relative === "" || !relative.startsWith(`..${path.sep}`) && relative !== ".." && !path.isAbsolute(relative);
+  return relative === '' || (!relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative));
 }
-function errorMessage(error) {
+
+function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
-async function findAssets(inputDir, outputDir, recursive) {
-  const assets = [];
-  async function visit(directory) {
+
+async function findAssets(inputDir: string, outputDir: string, recursive: boolean): Promise<SourceAsset[]> {
+  const assets: SourceAsset[] = [];
+
+  async function visit(directory: string): Promise<void> {
     const entries = await readdir(directory, { withFileTypes: true });
     entries.sort((a, b) => a.name.localeCompare(b.name));
     for (const entry of entries) {
@@ -52,26 +88,38 @@ async function findAssets(inputDir, outputDir, recursive) {
       }
     }
   }
+
   await visit(inputDir);
   return assets;
 }
-async function rasterComponent(asset, component, warnings) {
+
+async function rasterComponent(
+  asset: SourceAsset,
+  component: string,
+  warnings: string[],
+): Promise<string> {
   const bytes = await readFile(asset.path);
+
+  // Warn early about large raster files — they bloat the JS bundle.
   if (bytes.length > RASTER_SIZE_WARN_BYTES) {
     const sourceKB = Math.round(bytes.length / 1024);
-    const bundleKB = Math.round(bytes.length * 4 / 3 / 1024);
+    const bundleKB = Math.round((bytes.length * 4) / 3 / 1024); // Base64 is ~4/3 the binary size
     warnings.push(
-      `"${path.basename(asset.path)}" is ${sourceKB} KB. Embedding it as Base64 will add ~${bundleKB} KB to the JavaScript bundle. Consider converting it to SVG to avoid this overhead.`
+      `"${path.basename(asset.path)}" is ${sourceKB} KB. ` +
+      `Embedding it as Base64 will add ~${bundleKB} KB to the JavaScript bundle. ` +
+      `Consider converting it to SVG to avoid this overhead.`,
     );
   }
-  let dimensions;
+
+  let dimensions: ReturnType<typeof imageSize>;
   try {
     dimensions = imageSize(bytes);
   } catch (error) {
     throw new Error(`Cannot read image dimensions for "${asset.path}": ${errorMessage(error)}`);
   }
   if (!dimensions.width || !dimensions.height) throw new Error(`Image "${asset.path}" does not have valid dimensions.`);
-  const dataUri = `data:${RASTER_MIME_TYPES[asset.extension]};base64,${bytes.toString("base64")}`;
+
+  const dataUri = `data:${RASTER_MIME_TYPES[asset.extension]};base64,${bytes.toString('base64')}`;
   return `import type { SVGProps } from 'react';
 
 export interface ${component}Props extends SVGProps<SVGSVGElement> {
@@ -90,27 +138,30 @@ export default function ${component}({ title, width, height, ...props }: ${compo
 }
 `;
 }
-async function svgComponent(asset, component) {
-  const source = await readFile(asset.path, "utf8");
+
+async function svgComponent(asset: SourceAsset, component: string): Promise<string> {
+  const source = await readFile(asset.path, 'utf8');
   try {
     return await transform(source, {
-      plugins: ["@svgr/plugin-svgo", "@svgr/plugin-jsx"],
+      plugins: ['@svgr/plugin-svgo', '@svgr/plugin-jsx'],
       typescript: true,
-      jsxRuntime: "automatic",
+      jsxRuntime: 'automatic',
       icon: true,
       titleProp: true,
-      exportType: "default",
-      prettier: false
+      exportType: 'default',
+      prettier: false,
     }, { componentName: component });
   } catch (error) {
     throw new Error(`Cannot convert SVG "${asset.path}": ${errorMessage(error)}`);
   }
 }
-async function generateIcons(options) {
+
+export async function generateIcons(options: GenerateIconsOptions): Promise<GenerateIconsResult> {
   const inputDir = path.resolve(options.inputDir);
   const outputDir = path.resolve(options.outputDir);
   const recursive = options.recursive ?? true;
   const overwrite = options.overwrite ?? false;
+
   let inputStat;
   try {
     inputStat = await stat(inputDir);
@@ -118,46 +169,58 @@ async function generateIcons(options) {
     throw new Error(`Input directory does not exist: "${inputDir}"`);
   }
   if (!inputStat.isDirectory()) throw new Error(`Input path is not a directory: "${inputDir}"`);
+
   const assets = await findAssets(inputDir, outputDir, recursive);
   if (assets.length === 0) throw new Error(`No supported image assets found in "${inputDir}".`);
-  const names = /* @__PURE__ */ new Map();
+
+  const names = new Map<string, string>();
   for (const asset of assets) {
-    const normalizedName = asset.name.toLocaleLowerCase("en-US");
+    const normalizedName = asset.name.toLocaleLowerCase('en-US');
     const previous = names.get(normalizedName);
     if (previous) {
       throw new Error(`Name collision: "${previous}" and "${asset.path}" both generate the component "${asset.name}". Rename one of the source files.`);
     }
     names.set(normalizedName, asset.path);
   }
-  const warnings = [];
+
+  const warnings: string[] = [];
+
   const converted = await Promise.all(assets.map(async (asset) => ({
     asset,
-    contents: VECTOR_EXTENSIONS.has(asset.extension) ? await svgComponent(asset, asset.name) : await rasterComponent(asset, asset.name, warnings)
+    contents: VECTOR_EXTENSIONS.has(asset.extension)
+      ? await svgComponent(asset, asset.name)
+      : await rasterComponent(asset, asset.name, warnings),
   })));
-  const indexContents = `${converted.map(
-    ({ asset }) => `export { default as ${asset.name}, type ${asset.name}Props } from './${asset.name}.js';`
-  ).join("\n")}
-`;
+
+  // Re-export both the default component AND the Props type so consumers can
+  // extend it without reaching into individual component files.
+  const indexContents = `${converted.map(({ asset }) =>
+    `export { default as ${asset.name}, type ${asset.name}Props } from './${asset.name}.js';`,
+  ).join('\n')}\n`;
+
   const outputs = [
     ...converted.map(({ asset, contents }) => ({ filePath: path.join(outputDir, `${asset.name}.tsx`), contents })),
-    { filePath: path.join(outputDir, "index.ts"), contents: indexContents }
+    { filePath: path.join(outputDir, 'index.ts'), contents: indexContents },
   ];
+
   if (!overwrite) {
-    const conflicts = [];
+    const conflicts: string[] = [];
     for (const output of outputs) {
       try {
         await access(output.filePath);
         conflicts.push(output.filePath);
       } catch {
+        // A missing destination is expected for a fresh generation.
       }
     }
-    if (conflicts.length) throw new Error(`Refusing to overwrite existing generated file(s): ${conflicts.join(", ")}. Use --overwrite to replace them.`);
+    if (conflicts.length) throw new Error(`Refusing to overwrite existing generated file(s): ${conflicts.join(', ')}. Use --overwrite to replace them.`);
   }
+
   await mkdir(outputDir, { recursive: true });
   for (const output of outputs) {
     const temporaryPath = `${output.filePath}.${randomUUID()}.tmp`;
     try {
-      await writeFile(temporaryPath, output.contents, "utf8");
+      await writeFile(temporaryPath, output.contents, 'utf8');
       if (overwrite) await rm(output.filePath, { force: true });
       await rename(temporaryPath, output.filePath);
     } catch (error) {
@@ -165,37 +228,14 @@ async function generateIcons(options) {
       throw new Error(`Failed to write "${output.filePath}": ${errorMessage(error)}`);
     }
   }
+
   return {
     icons: converted.map(({ asset }) => ({
       name: asset.name,
       source: path.relative(inputDir, asset.path),
-      componentFile: path.join(outputDir, `${asset.name}.tsx`)
+      componentFile: path.join(outputDir, `${asset.name}.tsx`),
     })),
     outputDir,
-    warnings
+    warnings,
   };
 }
-
-// src/cli.ts
-var program = new Command();
-program.name("react-icon-library").description(
-  "Generate reusable React icon components from SVG and raster image files.\nNote: raster images (PNG, JPEG, etc.) are embedded as Base64 data URIs.\nLarge raster files significantly increase JavaScript bundle size \u2014 prefer SVG where possible."
-).argument("[input-dir]", "directory containing image assets", "icons").option("-o, --output <directory>", "output directory for generated components", "src/icons").option("--no-recursive", "only read images directly inside the input directory").option("--overwrite", "replace existing generated component files").action(async (inputDir, options) => {
-  try {
-    const result = await generateIcons({
-      inputDir,
-      outputDir: options.output,
-      recursive: options.recursive,
-      ...options.overwrite === void 0 ? {} : { overwrite: options.overwrite }
-    });
-    for (const warning of result.warnings) {
-      console.warn(`Warning: ${warning}`);
-    }
-    console.log(`Generated ${result.icons.length} React icon(s) in ${result.outputDir}`);
-    for (const icon of result.icons) console.log(`  ${icon.name}  <-  ${icon.source}`);
-  } catch (error) {
-    console.error(`Error: ${error instanceof Error ? error.message : String(error)}`);
-    process.exitCode = 1;
-  }
-});
-program.parseAsync();

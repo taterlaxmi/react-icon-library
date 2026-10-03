@@ -101,7 +101,7 @@ Generated icons accept SVG props such as `className`, `style`, `width`, and `hei
 ## Programmatic API
 
 ```ts
-import { generateIcons } from 'react-icon-library';
+import { generateIcons } from '@taterlaxmi/react-icon-library/generator';
 
 const result = await generateIcons({
 	inputDir: './brand-assets',

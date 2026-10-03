@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /// <reference types="node" />
 import { Command } from 'commander';
-import { generateIcons } from './index.js';
+import { generateIcons } from './generator.js';
 
 const program = new Command();
 program
   .name('react-icon-library')
-  .description('Generate reusable React icon components from SVG and raster image files.')
+  .description(
+    'Generate reusable React icon components from SVG and raster image files.\n' +
+    'Note: raster images (PNG, JPEG, etc.) are embedded as Base64 data URIs.\n' +
+    'Large raster files significantly increase JavaScript bundle size — prefer SVG where possible.',
+  )
   .argument('[input-dir]', 'directory containing image assets', 'icons')
   .option('-o, --output <directory>', 'output directory for generated components', 'src/icons')
   .option('--no-recursive', 'only read images directly inside the input directory')
@@ -19,6 +23,9 @@ program
         recursive: options.recursive,
         ...(options.overwrite === undefined ? {} : { overwrite: options.overwrite }),
       });
+      for (const warning of result.warnings) {
+        console.warn(`Warning: ${warning}`);
+      }
       console.log(`Generated ${result.icons.length} React icon(s) in ${result.outputDir}`);
       for (const icon of result.icons) console.log(`  ${icon.name}  <-  ${icon.source}`);
     } catch (error) {
