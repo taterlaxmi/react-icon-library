@@ -1,4 +1,4 @@
-import sharp from 'sharp';
+import sharp, { type Metadata } from 'sharp';
 import { imageTracer } from 'imagetracer';
 
 export interface VectorizeOptions {
@@ -36,23 +36,83 @@ export interface VectorizeOptions {
     roundCoordinates?: number;
 }
 
+export interface VectorizeResult {
+    svg: string;
+    sourceWidth: number;
+    sourceHeight: number;
+    tracedWidth: number;
+    tracedHeight: number;
+}
+
 const DEFAULT_OPTIONS: Required<VectorizeOptions> = {
     maxDimension: 512,
-    numberOfColors: 16,
-    pathOmit: 8,
+    numberOfColors: 8,
+    pathOmit: 12,
     lineTolerance: 1,
     curveTolerance: 1,
     roundCoordinates: 1,
 };
 
+function validateOptions(options: Required<VectorizeOptions>): void {
+    if (!Number.isFinite(options.maxDimension) || options.maxDimension <= 0) {
+        throw new Error('maxDimension must be greater than 0.');
+    }
+
+    if (!Number.isInteger(options.numberOfColors) || options.numberOfColors < 2) {
+        throw new Error('numberOfColors must be an integer greater than or equal to 2.');
+    }
+
+    if (!Number.isFinite(options.pathOmit) || options.pathOmit < 0) {
+        throw new Error('pathOmit must be greater than or equal to 0.');
+    }
+
+    if (!Number.isFinite(options.lineTolerance) || options.lineTolerance <= 0) {
+        throw new Error('lineTolerance must be greater than 0.');
+    }
+
+    if (!Number.isFinite(options.curveTolerance) || options.curveTolerance <= 0) {
+        throw new Error('curveTolerance must be greater than 0.');
+    }
+
+    if (
+        !Number.isInteger(options.roundCoordinates) ||
+        options.roundCoordinates < 0 ||
+        options.roundCoordinates > 5
+    ) {
+        throw new Error('roundCoordinates must be an integer between 0 and 5.');
+    }
+}
+
 export async function rasterToSvg(
     inputPath: string,
     options: VectorizeOptions = {},
-): Promise<string> {
-    const config = {
+): Promise<VectorizeResult> {
+    const config: Required<VectorizeOptions> = {
         ...DEFAULT_OPTIONS,
         ...options,
     };
+
+    validateOptions(config);
+
+    let sourceMetadata: Metadata;
+
+    try {
+        sourceMetadata = await sharp(inputPath).metadata();
+    } catch (error) {
+        throw new Error(
+            `Cannot read image "${inputPath}": ${error instanceof Error ? error.message : String(error)
+            }`,
+        );
+    }
+
+    if (!sourceMetadata.width || !sourceMetadata.height) {
+        throw new Error(
+            `Cannot determine image dimensions for "${inputPath}".`,
+        );
+    }
+
+    const sourceWidth = sourceMetadata.width;
+    const sourceHeight = sourceMetadata.height;
 
     const { data, info } = await sharp(inputPath)
         .ensureAlpha()
@@ -71,31 +131,50 @@ export async function rasterToSvg(
         data: new Uint8ClampedArray(data),
     };
 
-    const svg = imageTracer.imageDataToSVG(imageData, {
-        ltres: config.lineTolerance,
-        qtres: config.curveTolerance,
-        pathomit: config.pathOmit,
+    let svg: string;
 
-        rightangleenhance: true,
+    try {
+        svg = imageTracer.imageDataToSVG(imageData, {
+            ltres: config.lineTolerance,
+            qtres: config.curveTolerance,
+            pathomit: config.pathOmit,
 
-        colorsampling: 2,
-        numberofcolors: config.numberOfColors,
-        colorquantcycles: 3,
+            rightangleenhance: true,
 
-        layering: 0,
+            colorsampling: 2,
+            numberofcolors: config.numberOfColors,
+            colorquantcycles: 3,
 
-        strokewidth: 0,
-        linefilter: false,
+            layering: 0,
 
-        scale: 1,
-        roundcoords: config.roundCoordinates,
+            strokewidth: 0,
+            linefilter: false,
 
-        viewbox: true,
-        desc: false,
+            scale: 1,
+            roundcoords: config.roundCoordinates,
 
-        blurradius: 0,
-        blurdelta: 20,
-    });
+            viewbox: true,
+            desc: false,
 
-    return svg;
+            blurradius: 0,
+            blurdelta: 20,
+        });
+    } catch (error) {
+        throw new Error(
+            `Cannot vectorize image "${inputPath}": ${error instanceof Error ? error.message : String(error)
+            }`,
+        );
+    }
+
+    if (!svg.trim()) {
+        throw new Error(`Vectorization produced an empty SVG for "${inputPath}".`);
+    }
+
+    return {
+        svg,
+        sourceWidth,
+        sourceHeight,
+        tracedWidth: info.width,
+        tracedHeight: info.height,
+    };
 }

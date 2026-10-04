@@ -2,30 +2,30 @@ import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'n
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { transform } from '@svgr/core';
-import { rasterToSvg } from './vectorizer.js';
+import { rasterToSvg, type VectorizeOptions, } from './vectorizer.js';
 
-const RASTER_MIME_TYPES: Readonly<Record<string, string>> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.avif': 'image/avif',
-};
+const RASTER_EXTENSIONS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.avif',
+]);
 const VECTOR_EXTENSIONS = new Set(['.svg']);
-
-/**
- * Raster images are embedded as Base64 data URIs inside the generated
- * JavaScript. A 10 KB source image adds roughly 14 KB to the JS bundle
- * (Base64 overhead ~37%). Prefer SVG for brand logos when possible.
- */
-const RASTER_SIZE_WARN_BYTES = 10 * 1024; // 10 KB
+const SVG_WARNING_SIZE_BYTES = 50 * 1024;
+const SVG_WARNING_PATH_COUNT = 30;
 
 export interface GenerateIconsOptions {
   inputDir: string;
   outputDir: string;
   recursive?: boolean;
   overwrite?: boolean;
+
+  /**
+   * Options used when converting raster images into SVG.
+   */
+  vectorize?: VectorizeOptions;
 }
 
 export interface GeneratedIcon {
@@ -83,7 +83,7 @@ async function findAssets(inputDir: string, outputDir: string, recursive: boolea
       }
       if (!entry.isFile()) continue;
       const extension = path.extname(entry.name).toLowerCase();
-      if (VECTOR_EXTENSIONS.has(extension) || extension in RASTER_MIME_TYPES) {
+      if (VECTOR_EXTENSIONS.has(extension) || RASTER_EXTENSIONS.has(extension)) {
         assets.push({ path: fullPath, name: componentName(fullPath), extension });
       }
     }
@@ -93,61 +93,27 @@ async function findAssets(inputDir: string, outputDir: string, recursive: boolea
   return assets;
 }
 
-// async function rasterComponent(
-//   asset: SourceAsset,
-//   component: string,
-//   warnings: string[],
-// ): Promise<string> {
-//   const bytes = await readFile(asset.path);
 
-//   // Warn early about large raster files — they bloat the JS bundle.
-//   if (bytes.length > RASTER_SIZE_WARN_BYTES) {
-//     const sourceKB = Math.round(bytes.length / 1024);
-//     const bundleKB = Math.round((bytes.length * 4) / 3 / 1024); // Base64 is ~4/3 the binary size
-//     warnings.push(
-//       `"${path.basename(asset.path)}" is ${sourceKB} KB. ` +
-//       `Embedding it as Base64 will add ~${bundleKB} KB to the JavaScript bundle. ` +
-//       `Consider converting it to SVG to avoid this overhead.`,
-//     );
-//   }
-
-//   let dimensions: ReturnType<typeof imageSize>;
-//   try {
-//     dimensions = imageSize(bytes);
-//   } catch (error) {
-//     throw new Error(`Cannot read image dimensions for "${asset.path}": ${errorMessage(error)}`);
-//   }
-//   if (!dimensions.width || !dimensions.height) throw new Error(`Image "${asset.path}" does not have valid dimensions.`);
-
-//   const dataUri = `data:${RASTER_MIME_TYPES[asset.extension]};base64,${bytes.toString('base64')}`;
-//   return `import type { SVGProps } from 'react';
-
-// export interface ${component}Props extends SVGProps<SVGSVGElement> {
-//   title?: string;
-// }
-
-// const imageSource = ${JSON.stringify(dataUri)};
-
-// export default function ${component}({ title, width, height, ...props }: ${component}Props) {
-//   return (
-//     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dimensions.width} ${dimensions.height}" width={width ?? '1em'} height={height ?? '1em'} role={title ? 'img' : undefined} aria-hidden={title ? undefined : true} {...props}>
-//       {title ? <title>{title}</title> : null}
-//       <image href={imageSource} x="0" y="0" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" />
-//     </svg>
-//   );
-// }
-// `;
-// }
+interface RasterComponentResult {
+  contents: string;
+  svgSizeBytes: number;
+  pathCount: number;
+  sourceWidth: number;
+  sourceHeight: number;
+  tracedWidth: number;
+  tracedHeight: number;
+}
 
 async function rasterComponent(
   asset: SourceAsset,
   component: string,
-): Promise<string> {
+  vectorizeOptions?: VectorizeOptions,
+): Promise<RasterComponentResult> {
   try {
-    const svg = await rasterToSvg(asset.path);
+    const result = await rasterToSvg(asset.path, vectorizeOptions);
 
-    return await transform(
-      svg,
+    const contents = await transform(
+      result.svg,
       {
         plugins: ['@svgr/plugin-svgo', '@svgr/plugin-jsx'],
         typescript: true,
@@ -161,6 +127,18 @@ async function rasterComponent(
         componentName: component,
       },
     );
+
+    const pathCount = (result.svg.match(/<path\b/g) ?? []).length;
+
+    return {
+      contents,
+      svgSizeBytes: Buffer.byteLength(result.svg, 'utf8'),
+      pathCount,
+      sourceWidth: result.sourceWidth,
+      sourceHeight: result.sourceHeight,
+      tracedWidth: result.tracedWidth,
+      tracedHeight: result.tracedHeight,
+    };
   } catch (error) {
     throw new Error(
       `Cannot vectorize raster image "${asset.path}": ${errorMessage(error)}`,
@@ -213,13 +191,55 @@ export async function generateIcons(options: GenerateIconsOptions): Promise<Gene
   }
 
   const warnings: string[] = [];
+  const converted = await Promise.all(
+    assets.map(async (asset) => {
+      if (VECTOR_EXTENSIONS.has(asset.extension)) {
+        return {
+          asset,
+          contents: await svgComponent(asset, asset.name),
+        };
+      }
 
-  const converted = await Promise.all(assets.map(async (asset) => ({
-    asset,
-    contents: VECTOR_EXTENSIONS.has(asset.extension)
-      ? await svgComponent(asset, asset.name)
-      : await rasterComponent(asset, asset.name),
-  })));
+      const result = await rasterComponent(
+        asset,
+        asset.name,
+        options.vectorize,
+      );
+
+      return {
+        asset,
+        contents: result.contents,
+        svgSizeBytes: result.svgSizeBytes,
+        pathCount: result.pathCount,
+        sourceWidth: result.sourceWidth,
+        sourceHeight: result.sourceHeight,
+        tracedWidth: result.tracedWidth,
+        tracedHeight: result.tracedHeight,
+      };
+    }),
+  );
+
+  for (const item of converted) {
+    if (!item.svgSizeBytes || !item.pathCount) {
+      continue;
+    }
+
+    if (item.svgSizeBytes > SVG_WARNING_SIZE_BYTES) {
+      warnings.push(
+        `Icon "${item.asset.name}" generated a large SVG ` +
+        `(${Math.round(item.svgSizeBytes / 1024)} KB). ` +
+        `Consider using the original SVG or reducing tracing complexity.`,
+      );
+    }
+
+    if (item.pathCount > SVG_WARNING_PATH_COUNT) {
+      warnings.push(
+        `Icon "${item.asset.name}" generated a complex SVG ` +
+        `(${item.pathCount} paths). ` +
+        `Consider reducing colors or increasing path omission.`,
+      );
+    }
+  }
 
   // Re-export the default component and derive its Props type using React's ComponentProps utility
   const indexContents = `${converted.map(({ asset }) =>
