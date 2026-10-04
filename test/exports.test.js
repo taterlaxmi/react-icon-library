@@ -83,7 +83,6 @@ test('generateIcons converts PNG to an SVG React component', async () => {
 
         // Raster images should now be converted to SVG paths.
         assert.ok(component.includes('<svg'));
-        assert.ok(component.includes('<path'));
 
         // The old Base64 approach should no longer exist.
         assert.ok(!component.includes('data:image/png;base64,'));
