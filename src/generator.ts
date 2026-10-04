@@ -1,8 +1,8 @@
 import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { imageSize } from 'image-size';
 import { transform } from '@svgr/core';
+import { rasterToSvg } from './vectorizer.js';
 
 const RASTER_MIME_TYPES: Readonly<Record<string, string>> = {
   '.png': 'image/png',
@@ -93,50 +93,79 @@ async function findAssets(inputDir: string, outputDir: string, recursive: boolea
   return assets;
 }
 
+// async function rasterComponent(
+//   asset: SourceAsset,
+//   component: string,
+//   warnings: string[],
+// ): Promise<string> {
+//   const bytes = await readFile(asset.path);
+
+//   // Warn early about large raster files — they bloat the JS bundle.
+//   if (bytes.length > RASTER_SIZE_WARN_BYTES) {
+//     const sourceKB = Math.round(bytes.length / 1024);
+//     const bundleKB = Math.round((bytes.length * 4) / 3 / 1024); // Base64 is ~4/3 the binary size
+//     warnings.push(
+//       `"${path.basename(asset.path)}" is ${sourceKB} KB. ` +
+//       `Embedding it as Base64 will add ~${bundleKB} KB to the JavaScript bundle. ` +
+//       `Consider converting it to SVG to avoid this overhead.`,
+//     );
+//   }
+
+//   let dimensions: ReturnType<typeof imageSize>;
+//   try {
+//     dimensions = imageSize(bytes);
+//   } catch (error) {
+//     throw new Error(`Cannot read image dimensions for "${asset.path}": ${errorMessage(error)}`);
+//   }
+//   if (!dimensions.width || !dimensions.height) throw new Error(`Image "${asset.path}" does not have valid dimensions.`);
+
+//   const dataUri = `data:${RASTER_MIME_TYPES[asset.extension]};base64,${bytes.toString('base64')}`;
+//   return `import type { SVGProps } from 'react';
+
+// export interface ${component}Props extends SVGProps<SVGSVGElement> {
+//   title?: string;
+// }
+
+// const imageSource = ${JSON.stringify(dataUri)};
+
+// export default function ${component}({ title, width, height, ...props }: ${component}Props) {
+//   return (
+//     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dimensions.width} ${dimensions.height}" width={width ?? '1em'} height={height ?? '1em'} role={title ? 'img' : undefined} aria-hidden={title ? undefined : true} {...props}>
+//       {title ? <title>{title}</title> : null}
+//       <image href={imageSource} x="0" y="0" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" />
+//     </svg>
+//   );
+// }
+// `;
+// }
+
 async function rasterComponent(
   asset: SourceAsset,
   component: string,
-  warnings: string[],
 ): Promise<string> {
-  const bytes = await readFile(asset.path);
+  try {
+    const svg = await rasterToSvg(asset.path);
 
-  // Warn early about large raster files — they bloat the JS bundle.
-  if (bytes.length > RASTER_SIZE_WARN_BYTES) {
-    const sourceKB = Math.round(bytes.length / 1024);
-    const bundleKB = Math.round((bytes.length * 4) / 3 / 1024); // Base64 is ~4/3 the binary size
-    warnings.push(
-      `"${path.basename(asset.path)}" is ${sourceKB} KB. ` +
-      `Embedding it as Base64 will add ~${bundleKB} KB to the JavaScript bundle. ` +
-      `Consider converting it to SVG to avoid this overhead.`,
+    return await transform(
+      svg,
+      {
+        plugins: ['@svgr/plugin-svgo', '@svgr/plugin-jsx'],
+        typescript: true,
+        jsxRuntime: 'automatic',
+        icon: true,
+        titleProp: true,
+        exportType: 'default',
+        prettier: false,
+      },
+      {
+        componentName: component,
+      },
+    );
+  } catch (error) {
+    throw new Error(
+      `Cannot vectorize raster image "${asset.path}": ${errorMessage(error)}`,
     );
   }
-
-  let dimensions: ReturnType<typeof imageSize>;
-  try {
-    dimensions = imageSize(bytes);
-  } catch (error) {
-    throw new Error(`Cannot read image dimensions for "${asset.path}": ${errorMessage(error)}`);
-  }
-  if (!dimensions.width || !dimensions.height) throw new Error(`Image "${asset.path}" does not have valid dimensions.`);
-
-  const dataUri = `data:${RASTER_MIME_TYPES[asset.extension]};base64,${bytes.toString('base64')}`;
-  return `import type { SVGProps } from 'react';
-
-export interface ${component}Props extends SVGProps<SVGSVGElement> {
-  title?: string;
-}
-
-const imageSource = ${JSON.stringify(dataUri)};
-
-export default function ${component}({ title, width, height, ...props }: ${component}Props) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${dimensions.width} ${dimensions.height}" width={width ?? '1em'} height={height ?? '1em'} role={title ? 'img' : undefined} aria-hidden={title ? undefined : true} {...props}>
-      {title ? <title>{title}</title> : null}
-      <image href={imageSource} x="0" y="0" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" />
-    </svg>
-  );
-}
-`;
 }
 
 async function svgComponent(asset: SourceAsset, component: string): Promise<string> {
@@ -189,13 +218,13 @@ export async function generateIcons(options: GenerateIconsOptions): Promise<Gene
     asset,
     contents: VECTOR_EXTENSIONS.has(asset.extension)
       ? await svgComponent(asset, asset.name)
-      : await rasterComponent(asset, asset.name, warnings),
+      : await rasterComponent(asset, asset.name),
   })));
 
-  // Re-export both the default component AND the Props type so consumers can
-  // extend it without reaching into individual component files.
+  // Re-export the default component and derive its Props type using React's ComponentProps utility
   const indexContents = `${converted.map(({ asset }) =>
-    `export { default as ${asset.name}, type ${asset.name}Props } from './${asset.name}.js';`,
+    `export { default as ${asset.name} } from './${asset.name}.js';\n` +
+    `export type ${asset.name}Props = import('react').ComponentProps<typeof import('./${asset.name}.js').default>;`,
   ).join('\n')}\n`;
 
   const outputs = [

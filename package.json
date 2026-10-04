@@ -1,6 +1,6 @@
 {
     "name": "@taterlaxmi/react-icon-library",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "publishConfig": {
         "access": "public"
     },
@@ -46,7 +46,9 @@
         "@svgr/core": "^8.1.0",
         "@svgr/plugin-jsx": "^8.1.0",
         "@svgr/plugin-svgo": "^8.1.0",
-        "image-size": "^2.0.2"
+        "image-size": "^2.0.2",
+        "imagetracer": "^0.2.2",
+        "sharp": "^0.35.5"
     },
     "peerDependencies": {
         "react": ">=18"
@@ -57,7 +59,7 @@
         "commander": "^15.0.0",
         "react": "^19.0.0",
         "tsup": "^8.5.1",
-        "typescript": "^7.0.2"
+        "typescript": "^5.9.3"
     },
     "repository": {
         "type": "git",
