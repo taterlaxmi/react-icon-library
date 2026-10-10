@@ -1,6 +1,6 @@
 {
     "name": "@taterlaxmi/react-icon-library",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "publishConfig": {
         "access": "public"
     },
@@ -10,7 +10,7 @@
     "type": "module",
     "sideEffects": false,
     "engines": {
-        "node": ">=22.0.0"
+        "node": ">=18.0.0"
     },
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
@@ -41,6 +41,7 @@
         "generate": "node ./dist/cli.js",
         "typecheck": "tsc --noEmit",
         "test": "node --experimental-strip-types --test test/*.test.*",
+        "preview": "start preview.html",
         "prepublishOnly": "npm run build && npm run typecheck && npm test"
     },
     "dependencies": {
