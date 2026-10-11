@@ -105,7 +105,14 @@ export const MyBrand = createIcon('MyBrand', '0 0 24 24', (props) => (
 | --- | --- | --- | --- |
 | **DrinkPrime** | `<Drinkprime />` | `#4548B9` | `0 0 48 36` |
 | **Kiwi** | `<Kiwi />` | `#81BE56` | `0 0 120 32` |
+| **Klook** | `<Klook />` | `#EF987A` | `0 0 500 135` |
+| **Livpure Smart** | `<LivpureSmart />` | `#4E2C8B` | `0 0 200 143` |
+| **PhonePe** | `<Phonepe />` | `#5E249E` | `0 0 264 264` |
+| **Slice** | `<Slice />` | `#8E19C0` | `0 0 186 72` |
+| **Snapdeal** | `<Snapdeal />` | `#FF003E` | `0 0 216 174` |
+| **Upstox** | `<Upstox />` | `#432974` | `0 0 60 23` |
 | **Zepto** | `<Zepto />` | `#950EDB` | `0 0 90 30` |
+| **Zerodha** | `<Zerodha />` | `#9864F2` | `0 0 184 41` |
 
 ---
 
@@ -124,20 +131,40 @@ This library was re-architected to use **pristine vector paths**:
 
 ---
 
-## Adding Assets & Generating Components
+## Adding New Brand Icons (Automated Workflow)
 
-To add or regenerate brand icons in this repository:
+Adding an icon to the library requires only **two simple steps**:
 
-1. Place clean SVG files in `brand-assets/` (e.g. `brand-assets/mybrand.svg`).
-2. Run the generator:
+### Step 1: Drop the Image into `brand-assets/`
+Place your image file in `brand-assets/` using lowercase kebab-case (SVG recommended for best quality, or PNG/JPEG):
+- `brand-assets/livpure-smart.svg` (or `livpure-smart.png`)
+
+> **Naming Rule**: The filename automatically defines the PascalCase React component:
+> `livpure-smart.svg` $\rightarrow$ `<LivpureSmart />` and `type LivpureSmartProps`
+
+### Step 2: Run One Command
 
 ```bash
 npm run dev
 ```
 
-This compiles your SVGs into typed components in `src/icons/`.
+**Everything else happens automatically behind the scenes**:
+1. 🎨 **Auto-Conversion**: Converts your asset into a Lucide-style React component (`src/icons/LivpureSmart.tsx`).
+2. 📦 **Auto-Export**: Re-exports the new component in `src/icons/index.ts` and the package root.
+3. 🔨 **Auto-Build**: Compiles ESM, CJS, and TypeScript definitions into `dist/`.
+4. ✨ **Auto-Sync Preview**: Regenerates `preview.html` with a new interactive card for your icon.
+5. 🌐 **Auto-Launch**: Opens `preview.html` in your browser so you can immediately inspect visual quality.
 
-### CLI Usage in Another Project
+> 💡 **Silent Build**: If you just want to build without opening the browser, run:
+> ```bash
+> npm run build
+> ```
+
+---
+
+### CLI Usage in External Projects
+
+You can also run the generator as a standalone CLI in any project:
 
 ```bash
 npx react-icon-library ./brand-assets --output ./src/icons --overwrite
@@ -187,11 +214,11 @@ Or open [`preview.html`](preview.html) directly in any browser. The preview page
 
 ## Continuous Integration (CI)
 
-A GitHub Actions workflow is set up at [`.github/workflows/ci.yml`](.github/workflows/ci.yml). It automatically runs on every push and pull request across **Node 18, 20, and 22**, ensuring:
-- Clean dependency installation
-- Full TypeScript type checking
-- Cross-platform build verification
-- Unit test suite execution
+A GitHub Actions workflow is set up at [`.github/workflows/ci.yml`](.github/workflows/ci.yml). It automatically runs on every push and pull request on **Node.js 22**, ensuring:
+- Clean dependency installation (`npm ci`)
+- Full TypeScript type checking (`npm run typecheck`)
+- Package build verification (`npm run build`)
+- Unit test suite execution (`npm test`)
 
 ---
 

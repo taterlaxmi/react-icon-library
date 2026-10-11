@@ -104,6 +104,51 @@ interface RasterComponentResult {
   tracedHeight: number;
 }
 
+function wrapAsCreateIcon(componentName: string, rawCode: string): string {
+  const viewBoxMatch = rawCode.match(/viewBox="([^"]+)"/);
+  const viewBox = viewBoxMatch?.[1] ?? '0 0 24 24';
+
+  const svgInnerMatch = rawCode.match(/<svg\b[^>]*>([\s\S]*?)<\/svg>/);
+  let innerJsx = (svgInnerMatch?.[1] ?? '').trim();
+
+  // Remove SVGR title conditional since createIcon handles title and accessibility natively
+  innerJsx = innerJsx.replace(/\{title \? <title[^>]*>\{title\}<\/title> : null\}/g, '').trim();
+
+  // Allow color prop to override brand colors
+  const fillMatches = [...innerJsx.matchAll(/fill="([^"]+)"/g)].map((m) => m[1]);
+  const distinctFills = [...new Set(fillMatches)].filter((c) => c !== 'none');
+
+  if (distinctFills.length > 0) {
+    innerJsx = innerJsx.replace(/fill="([^"]+)"/g, (match, color) => {
+      if (color === 'none') return match;
+      return `fill={props.color ?? '${color}'}`;
+    });
+  }
+
+  // Safely wrap in fragment if there are multiple sibling elements or if it's not a single self-closing tag
+  const trimmed = innerJsx.trim();
+  const isSingleSelfClosing = /^<[a-zA-Z0-9]+[^>]*\/>$/.test(trimmed);
+  const isAlreadyFragment = trimmed.startsWith('<>') || trimmed.startsWith('<React.Fragment');
+  const wrappedContent = isSingleSelfClosing || isAlreadyFragment
+    ? trimmed
+    : `<>\n    ${trimmed}\n  </>`;
+
+  return `import { createIcon, type IconProps } from '../createIcon.js';
+
+/**
+ * ${componentName} brand icon component (<svg> rendered via createIcon).
+ *
+ * Supports \`size\`, \`color\`, \`title\`, \`className\`, and all standard SVG props.
+ */
+export const ${componentName} = createIcon('${componentName}', '${viewBox}', (props) => (
+  ${wrappedContent}
+));
+
+export default ${componentName};
+export type ${componentName}Props = IconProps;
+`;
+}
+
 async function rasterComponent(
   asset: SourceAsset,
   component: string,
@@ -131,7 +176,7 @@ async function rasterComponent(
     const pathCount = (result.svg.match(/<path\b/g) ?? []).length;
 
     return {
-      contents,
+      contents: wrapAsCreateIcon(component, contents),
       svgSizeBytes: Buffer.byteLength(result.svg, 'utf8'),
       pathCount,
       sourceWidth: result.sourceWidth,
@@ -149,7 +194,7 @@ async function rasterComponent(
 async function svgComponent(asset: SourceAsset, component: string): Promise<string> {
   const source = await readFile(asset.path, 'utf8');
   try {
-    return await transform(source, {
+    const raw = await transform(source, {
       plugins: ['@svgr/plugin-svgo', '@svgr/plugin-jsx'],
       typescript: true,
       jsxRuntime: 'automatic',
@@ -158,6 +203,7 @@ async function svgComponent(asset: SourceAsset, component: string): Promise<stri
       exportType: 'default',
       prettier: false,
     }, { componentName: component });
+    return wrapAsCreateIcon(component, raw);
   } catch (error) {
     throw new Error(`Cannot convert SVG "${asset.path}": ${errorMessage(error)}`);
   }
@@ -220,32 +266,55 @@ export async function generateIcons(options: GenerateIconsOptions): Promise<Gene
   );
 
   for (const item of converted) {
-    if (!item.svgSizeBytes || !item.pathCount) {
-      continue;
-    }
+    const ext = item.asset.extension.toLowerCase();
+    const isJpeg = ext === '.jpg' || ext === '.jpeg';
+    const isRaster = ext !== '.svg';
 
-    if (item.svgSizeBytes > SVG_WARNING_SIZE_BYTES) {
+    if (isJpeg) {
       warnings.push(
-        `Icon "${item.asset.name}" generated a large SVG ` +
-        `(${Math.round(item.svgSizeBytes / 1024)} KB). ` +
-        `Consider using the original SVG or reducing tracing complexity.`,
+        `[Format Warning] "${item.asset.name}" source is a JPEG (${path.basename(item.asset.path)}). ` +
+        `Lossy compression causes fuzzy edge halos. Recommend using PNG or official SVG.`,
       );
     }
 
-    if (item.pathCount > SVG_WARNING_PATH_COUNT) {
+    if (isRaster && item.sourceWidth && item.sourceHeight) {
+      if (item.sourceWidth < 400 || item.sourceHeight < 120) {
+        warnings.push(
+          `[Resolution Warning] "${item.asset.name}" source resolution is low (${item.sourceWidth}x${item.sourceHeight}px). ` +
+          `Typography and curves may appear blurry or wobbly. Recommend providing an 800px+ asset.`,
+        );
+      }
+
+      const ratio = item.sourceWidth / item.sourceHeight;
+      if (ratio > 2.8) {
+        warnings.push(
+          `[Banner Warning] "${item.asset.name}" is a wide banner wordmark (${ratio.toFixed(1)}:1 aspect ratio). ` +
+          `Text will be very small at standard 24px icon sizes. Recommend using a square brand emblem/monogram.`,
+        );
+      }
+    }
+
+    if (item.svgSizeBytes && item.svgSizeBytes > SVG_WARNING_SIZE_BYTES) {
       warnings.push(
-        `Icon "${item.asset.name}" generated a complex SVG ` +
+        `[Size Warning] "${item.asset.name}" generated a large SVG ` +
+        `(${Math.round(item.svgSizeBytes / 1024)} KB). ` +
+        `Consider using an official SVG to minimize bundle size.`,
+      );
+    }
+
+    if (item.pathCount && item.pathCount > SVG_WARNING_PATH_COUNT) {
+      warnings.push(
+        `[Complexity Warning] "${item.asset.name}" generated a complex autotraced SVG ` +
         `(${item.pathCount} paths). ` +
-        `Consider reducing colors or increasing path omission.`,
+        `Consider replacing with an official SVG.`,
       );
     }
   }
 
-  // Re-export the default component and derive its Props type using React's ComponentProps utility
+  // Re-export named components, their Props types, and createIcon
   const indexContents = `${converted.map(({ asset }) =>
-    `export { default as ${asset.name} } from './${asset.name}.js';\n` +
-    `export type ${asset.name}Props = import('react').ComponentProps<typeof import('./${asset.name}.js').default>;`,
-  ).join('\n')}\n`;
+    `export { ${asset.name}, type ${asset.name}Props } from './${asset.name}.js';`,
+  ).join('\n')}\nexport { createIcon, type IconProps, type IconComponent } from '../createIcon.js';\n`;
 
   const outputs = [
     ...converted.map(({ asset, contents }) => ({ filePath: path.join(outputDir, `${asset.name}.tsx`), contents })),

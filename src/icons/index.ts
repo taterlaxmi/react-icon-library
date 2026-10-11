@@ -1,4 +1,14 @@
+export { Bhim, type BhimProps } from './Bhim.js';
 export { Drinkprime, type DrinkprimeProps } from './Drinkprime.js';
 export { Kiwi, type KiwiProps } from './Kiwi.js';
+export { Klook, type KlookProps } from './Klook.js';
+export { LivpureSmart, type LivpureSmartProps } from './LivpureSmart.js';
+export { Mobikwik, type MobikwikProps } from './Mobikwik.js';
+export { Phonepe, type PhonepeProps } from './Phonepe.js';
+export { Slice, type SliceProps } from './Slice.js';
+export { Snapdeal, type SnapdealProps } from './Snapdeal.js';
+export { Supermoney, type SupermoneyProps } from './Supermoney.js';
+export { Upstox, type UpstoxProps } from './Upstox.js';
 export { Zepto, type ZeptoProps } from './Zepto.js';
+export { Zerodha, type ZerodhaProps } from './Zerodha.js';
 export { createIcon, type IconProps, type IconComponent } from '../createIcon.js';

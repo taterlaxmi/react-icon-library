@@ -34,6 +34,12 @@ export interface VectorizeOptions {
      * Round SVG coordinates to this many decimal places.
      */
     roundCoordinates?: number;
+
+    /**
+     * Automatically detect and remove solid canvas background color.
+     * Defaults to true.
+     */
+    removeBackground?: boolean;
 }
 
 export interface VectorizeResult {
@@ -46,11 +52,12 @@ export interface VectorizeResult {
 
 const DEFAULT_OPTIONS: Required<VectorizeOptions> = {
     maxDimension: 512,
-    numberOfColors: 8,
-    pathOmit: 12,
-    lineTolerance: 1,
-    curveTolerance: 1,
+    numberOfColors: 4,
+    pathOmit: 8,
+    lineTolerance: 0.3,
+    curveTolerance: 0.5,
     roundCoordinates: 1,
+    removeBackground: true,
 };
 
 function validateOptions(options: Required<VectorizeOptions>): void {
@@ -100,21 +107,19 @@ export async function rasterToSvg(
         sourceMetadata = await sharp(inputPath).metadata();
     } catch (error) {
         throw new Error(
-            `Cannot read image "${inputPath}": ${error instanceof Error ? error.message : String(error)
-            }`,
+            `Cannot read image "${inputPath}": ${error instanceof Error ? error.message : String(error)}`,
         );
     }
 
     if (!sourceMetadata.width || !sourceMetadata.height) {
-        throw new Error(
-            `Cannot determine image dimensions for "${inputPath}".`,
-        );
+        throw new Error(`Cannot determine image dimensions for "${inputPath}".`);
     }
 
     const sourceWidth = sourceMetadata.width;
     const sourceHeight = sourceMetadata.height;
 
-    const { data, info } = await sharp(inputPath)
+    // 1. Resize image to normalized icon dimensions with alpha
+    let { data, info } = await sharp(inputPath)
         .ensureAlpha()
         .resize({
             width: config.maxDimension,
@@ -125,16 +130,83 @@ export async function rasterToSvg(
         .raw()
         .toBuffer({ resolveWithObject: true });
 
+    let width = info.width;
+    let height = info.height;
+    let pixels = new Uint8ClampedArray(data);
+
+    // 2. Smart background removal: detect uniform border/corner colors
+    let bgInfo: { r: number; g: number; b: number } | undefined;
+    if (config.removeBackground && width > 4 && height > 4) {
+        const cornerIndices = [
+            0,
+            (width - 1) * 4,
+            (height - 1) * width * 4,
+            ((height - 1) * width + (width - 1)) * 4,
+        ];
+
+        const corners = cornerIndices.map((idx) => ({
+            r: pixels[idx] ?? 0,
+            g: pixels[idx + 1] ?? 0,
+            b: pixels[idx + 2] ?? 0,
+            a: pixels[idx + 3] ?? 0,
+        }));
+
+        const bg = corners[0]!;
+        const isUniformBg = corners.every((c) => {
+            const dr = Math.abs(c.r - bg.r);
+            const dg = Math.abs(c.g - bg.g);
+            const db = Math.abs(c.b - bg.b);
+            return (dr + dg + db) < 60 && c.a > 150;
+        });
+
+        if (isUniformBg) {
+            bgInfo = bg;
+            const tolerance = 75;
+            for (let i = 0; i < pixels.length; i += 4) {
+                const r = pixels[i]!;
+                const g = pixels[i + 1]!;
+                const b = pixels[i + 2]!;
+                const dist = Math.hypot(r - bg.r, g - bg.g, b - bg.b);
+                if (dist < tolerance) {
+                    pixels[i + 3] = 0; // Transparent!
+                }
+            }
+
+            // Auto-trim transparent borders so the icon is centered and bounds the logo tightly
+            try {
+                const trimmed = await sharp(Buffer.from(pixels.buffer), {
+                    raw: { width, height, channels: 4 },
+                })
+                    .trim()
+                    .extend({
+                        top: 4,
+                        bottom: 4,
+                        left: 4,
+                        right: 4,
+                        background: { r: 0, g: 0, b: 0, alpha: 0 },
+                    })
+                    .raw()
+                    .toBuffer({ resolveWithObject: true });
+
+                width = trimmed.info.width;
+                height = trimmed.info.height;
+                pixels = new Uint8ClampedArray(trimmed.data);
+            } catch {
+                // If trim finds only transparent pixels, retain un-trimmed pixels
+            }
+        }
+    }
+
     const imageData = {
-        width: info.width,
-        height: info.height,
-        data: new Uint8ClampedArray(data),
+        width,
+        height,
+        data: pixels,
     };
 
-    let svg: string;
+    let rawSvg: string;
 
     try {
-        svg = imageTracer.imageDataToSVG(imageData, {
+        rawSvg = imageTracer.imageDataToSVG(imageData, {
             ltres: config.lineTolerance,
             qtres: config.curveTolerance,
             pathomit: config.pathOmit,
@@ -161,20 +233,64 @@ export async function rasterToSvg(
         });
     } catch (error) {
         throw new Error(
-            `Cannot vectorize image "${inputPath}": ${error instanceof Error ? error.message : String(error)
-            }`,
+            `Cannot vectorize image "${inputPath}": ${error instanceof Error ? error.message : String(error)}`,
         );
     }
 
-    if (!svg.trim()) {
+    if (!rawSvg.trim()) {
         throw new Error(`Vectorization produced an empty SVG for "${inputPath}".`);
     }
 
+    // 3. Clean transparent paths, faint background tint artifacts, and full-screen bounding box
+    let cleanedSvg = rawSvg
+        // Strip any paths with opacity < 0.15 (handles opacity="0", opacity="0.047", etc.)
+        .replace(/<path\b[^>]*\bopacity="0(?:\.[0-1]\d*)?"[^>]*\/>\s*/gi, '')
+        // Strip any paths with rgba fill where alpha is near 0
+        .replace(/<path\b[^>]*\bfill="rgba\([^)]*,\s*0(?:\.[0-1]\d*)?\)"[^>]*\/>\s*/gi, '')
+        // Remove redundant full-canvas background boxes
+        .replace(new RegExp(`<path\\b[^>]*d="M\\s*0[,\\s]0\\s*[^"]*${width}[^"]*"[^>]*\\/>\\s*`, 'gi'), '')
+        // Clean redundant opacity="1" attributes
+        .replace(/\s+opacity="1"/g, '');
+
+    // If a uniform background color was detected and removed, strip any paths whose fill is close to that bg color
+    if (bgInfo) {
+        cleanedSvg = cleanedSvg.replace(/<path\b[^>]*\bfill="rgb\((\d+),\s*(\d+),\s*(\d+)\)"[^>]*\/>\s*/gi, (match, r, g, b) => {
+            const dist = Math.hypot(Number(r) - bgInfo!.r, Number(g) - bgInfo!.g, Number(b) - bgInfo!.b);
+            if (dist < 60) {
+                return '';
+            }
+            return match;
+        });
+
+        // If the detected background was a vibrant brand color (e.g. Snapdeal red or Upstox purple)
+        // and the extracted glyphs are white/near-white, map the glyphs to that brand color so the icon
+        // is prominently visible and branded instead of an invisible washed-out white shape.
+        const bgSaturation = Math.max(bgInfo.r, bgInfo.g, bgInfo.b) - Math.min(bgInfo.r, bgInfo.g, bgInfo.b);
+        if (bgSaturation > 40) {
+            const brandHex = `#${[bgInfo.r, bgInfo.g, bgInfo.b].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+            cleanedSvg = cleanedSvg.replace(/<path\b([^>]*\bfill="rgb\((\d+),\s*(\d+),\s*(\d+)\)"[^>]*)>/gi, (match, before, r, g, b) => {
+                const nr = Number(r), ng = Number(g), nb = Number(b);
+                const isLightNeutral = Math.min(nr, ng, nb) > 170 && (Math.max(nr, ng, nb) - Math.min(nr, ng, nb)) < 45;
+                if (isLightNeutral) {
+                    return match
+                        .replace(/fill="rgb\([^)]+\)"/, `fill="${brandHex}"`)
+                        .replace(/stroke="rgb\([^)]+\)"/, `stroke="${brandHex}"`);
+                }
+                return match;
+            });
+        }
+    }
+
+    // Safety fallback for test cases or single-pixel solid images
+    if (!cleanedSvg.includes('<path') && rawSvg.includes('<path')) {
+        cleanedSvg = rawSvg.replace(/\s+opacity="1"/g, '');
+    }
+
     return {
-        svg,
+        svg: cleanedSvg,
         sourceWidth,
         sourceHeight,
-        tracedWidth: info.width,
-        tracedHeight: info.height,
+        tracedWidth: width,
+        tracedHeight: height,
     };
 }
