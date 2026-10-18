@@ -26,14 +26,15 @@ test('package root exports all brand icons and createIcon helper', async () => {
     assert.equal(typeof icons.Kiwi, 'function');
     assert.equal(typeof icons.Drinkprime, 'function');
     assert.equal(typeof icons.Zepto, 'function');
+    assert.equal(typeof icons.ReferralVerse, 'function');
     assert.equal(typeof icons.createIcon, 'function');
     assert.equal('generateIcons' in icons, false, 'Generator should not be leaked in client bundle');
 });
 
 test('icons default to 24x24 and aria-hidden when no title is provided', async () => {
-    const { Kiwi, Drinkprime, Zepto } = await import('../dist/index.js');
+    const { Kiwi, Drinkprime, Zepto, ReferralVerse } = await import('../dist/index.js');
 
-    for (const Component of [Kiwi, Drinkprime, Zepto]) {
+    for (const Component of [Kiwi, Drinkprime, Zepto, ReferralVerse]) {
         const element = Component({});
         assert.equal(element.props.width, 24);
         assert.equal(element.props.height, 24);

@@ -68,7 +68,11 @@ export async function updatePreview() {
       .replace(/fill=\{props\.color\s*\?\?\s*['"]([^'"]+)['"]\}/g, 'fill="$1"')
       .replace(/opacity=\{([^}]+)\}/g, 'opacity="$1"')
       .replace(/fillRule="evenodd"/g, 'fill-rule="evenodd"')
-      .replace(/clipRule="evenodd"/g, 'clip-rule="evenodd"');
+      .replace(/clipRule="evenodd"/g, 'clip-rule="evenodd"')
+      .replace(/strokeWidth=\{([^}]+)\}/g, 'stroke-width="$1"')
+      .replace(/strokeLinecap="([^"]+)"/g, 'stroke-linecap="$1"')
+      .replace(/strokeLinejoin="([^"]+)"/g, 'stroke-linejoin="$1"')
+      .replace(/([a-zA-Z0-9_-]+)=\{([0-9.-]+)\}/g, '$1="$2"');
 
     // Extract primary brand color (prefer vibrant colors over neutral whites/blacks)
     const colorMatches = [...content.matchAll(/props\.color\s*\?\?\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);

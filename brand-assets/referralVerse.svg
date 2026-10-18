@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <title>ReferralVerse Icon</title>
+  <!-- Squircle Base Tile -->
+  <rect width="512" height="512" rx="104" fill="#15335B" />
+
+  <!-- Coupon / Ticket Card -->
+  <path fill="#FCF6E6" d="
+    M 104 82
+    L 340 82
+    A 24 24 0 0 1 364 106
+    L 364 394
+    A 24 24 0 0 1 340 418
+    L 104 418
+    A 24 24 0 0 1 80 394
+    L 80 348
+    A 32 32 0 0 0 80 284
+    L 80 216
+    A 32 32 0 0 0 80 152
+    L 80 106
+    A 24 24 0 0 1 104 82
+    Z
+  " />
+
+  <!-- Percent Symbol (%) -->
+  <g fill="#EBA52E">
+    <!-- Top-left Circle -->
+    <path fill-rule="evenodd" d="
+      M 160 162
+      A 34 34 0 1 1 159.9 162
+      Z
+      M 160 178
+      A 18 18 0 1 0 160.1 178
+      Z
+    " />
+    <!-- Diagonal Bar -->
+    <rect x="138" y="328" width="180" height="30" rx="15" transform="rotate(-52 138 328)" />
+    <!-- Bottom-right Circle -->
+    <path fill-rule="evenodd" d="
+      M 242 284
+      A 34 34 0 1 1 241.9 284
+      Z
+      M 242 300
+      A 18 18 0 1 0 242.1 300
+      Z
+    " />
+  </g>
+
+  <!-- Price Tag (Rotated 15.5 deg around center) -->
+  <g transform="translate(390 186) rotate(15.5)">
+    <!-- Tag Border / Outline separating it from ticket -->
+    <path fill="#15335B" d="
+      M -63 -45
+      L -25 -96
+      A 16 16 0 0 1 -12 -103
+      L 12 -103
+      A 16 16 0 0 1 25 -96
+      L 63 -45
+      A 20 20 0 0 1 70 -30
+      L 70 148
+      A 26 26 0 0 1 44 174
+      L -44 174
+      A 26 26 0 0 1 -70 148
+      L -70 -30
+      A 20 20 0 0 1 -63 -45
+      Z
+    " />
+    <!-- Tag Body with Hole Cutout -->
+    <path fill="#D55C3A" fill-rule="evenodd" d="
+      M -56 -42
+      L -22 -88
+      A 14 14 0 0 1 -11 -94
+      L 11 -94
+      A 14 14 0 0 1 22 -88
+      L 56 -42
+      A 18 18 0 0 1 62 -28
+      L 62 144
+      A 22 22 0 0 1 40 166
+      L -40 166
+      A 22 22 0 0 1 -62 144
+      L -62 -28
+      A 18 18 0 0 1 -56 -42
+      Z
+      M 0 -62
+      A 20 20 0 1 0 0.1 -62
+      Z
+    " />
+    <!-- Hole Inner Fill (Reveals Squircle Background) -->
+    <circle cx="0" cy="-62" r="20" fill="#15335B" />
+  </g>
+
+  <!-- Tag String / Loop (Rendered over the hole) -->
+  <path fill="none" stroke="#2B4D78" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" d="
+    M 406 132
+    C 392 70 418 42 452 42
+    C 486 42 510 68 510 110
+    C 510 148 492 186 460 206
+    C 452 211 444 214 438 210
+  " />
+</svg>

@@ -226,19 +226,28 @@ export async function generateIcons(options: GenerateIconsOptions): Promise<Gene
   const assets = await findAssets(inputDir, outputDir, recursive);
   if (assets.length === 0) throw new Error(`No supported image assets found in "${inputDir}".`);
 
-  const names = new Map<string, string>();
+  const assetMap = new Map<string, SourceAsset>();
   for (const asset of assets) {
     const normalizedName = asset.name.toLocaleLowerCase('en-US');
-    const previous = names.get(normalizedName);
-    if (previous) {
-      throw new Error(`Name collision: "${previous}" and "${asset.path}" both generate the component "${asset.name}". Rename one of the source files.`);
+    const existing = assetMap.get(normalizedName);
+    if (existing) {
+      const isExistingVector = VECTOR_EXTENSIONS.has(existing.extension);
+      const isCurrentVector = VECTOR_EXTENSIONS.has(asset.extension);
+      if (isCurrentVector && !isExistingVector) {
+        assetMap.set(normalizedName, asset);
+        continue;
+      } else if (!isCurrentVector && isExistingVector) {
+        continue;
+      }
+      throw new Error(`Name collision: "${existing.path}" and "${asset.path}" both generate the component "${asset.name}". Rename one of the source files.`);
     }
-    names.set(normalizedName, asset.path);
+    assetMap.set(normalizedName, asset);
   }
 
+  const resolvedAssets = Array.from(assetMap.values());
   const warnings: string[] = [];
   const converted = await Promise.all(
-    assets.map(async (asset) => {
+    resolvedAssets.map(async (asset) => {
       if (VECTOR_EXTENSIONS.has(asset.extension)) {
         return {
           asset,

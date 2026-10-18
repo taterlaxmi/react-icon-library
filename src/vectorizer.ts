@@ -161,7 +161,7 @@ export async function rasterToSvg(
 
         if (isUniformBg) {
             bgInfo = bg;
-            const tolerance = 75;
+            const tolerance = 35;
             for (let i = 0; i < pixels.length; i += 4) {
                 const r = pixels[i]!;
                 const g = pixels[i + 1]!;
@@ -267,17 +267,26 @@ export async function rasterToSvg(
         // is prominently visible and branded instead of an invisible washed-out white shape.
         const bgSaturation = Math.max(bgInfo.r, bgInfo.g, bgInfo.b) - Math.min(bgInfo.r, bgInfo.g, bgInfo.b);
         if (bgSaturation > 40) {
-            const brandHex = `#${[bgInfo.r, bgInfo.g, bgInfo.b].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
-            cleanedSvg = cleanedSvg.replace(/<path\b([^>]*\bfill="rgb\((\d+),\s*(\d+),\s*(\d+)\)"[^>]*)>/gi, (match, before, r, g, b) => {
-                const nr = Number(r), ng = Number(g), nb = Number(b);
-                const isLightNeutral = Math.min(nr, ng, nb) > 170 && (Math.max(nr, ng, nb) - Math.min(nr, ng, nb)) < 45;
-                if (isLightNeutral) {
-                    return match
-                        .replace(/fill="rgb\([^)]+\)"/, `fill="${brandHex}"`)
-                        .replace(/stroke="rgb\([^)]+\)"/, `stroke="${brandHex}"`);
-                }
-                return match;
+            const rgbMatches = [...cleanedSvg.matchAll(/fill="rgb\((\d+),\s*(\d+),\s*(\d+)\)"/gi)];
+            const hasOtherVibrantColors = rgbMatches.some((m) => {
+                const r = Number(m[1]), g = Number(m[2]), b = Number(m[3]);
+                const sat = Math.max(r, g, b) - Math.min(r, g, b);
+                return sat > 50;
             });
+
+            if (!hasOtherVibrantColors) {
+                const brandHex = `#${[bgInfo.r, bgInfo.g, bgInfo.b].map((x) => x.toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+                cleanedSvg = cleanedSvg.replace(/<path\b([^>]*\bfill="rgb\((\d+),\s*(\d+),\s*(\d+)\)"[^>]*)>/gi, (match, before, r, g, b) => {
+                    const nr = Number(r), ng = Number(g), nb = Number(b);
+                    const isLightNeutral = Math.min(nr, ng, nb) > 170 && (Math.max(nr, ng, nb) - Math.min(nr, ng, nb)) < 45;
+                    if (isLightNeutral) {
+                        return match
+                            .replace(/fill="rgb\([^)]+\)"/, `fill="${brandHex}"`)
+                            .replace(/stroke="rgb\([^)]+\)"/, `stroke="${brandHex}"`);
+                    }
+                    return match;
+                });
+            }
         }
     }
 
